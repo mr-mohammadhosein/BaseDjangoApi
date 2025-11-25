@@ -180,3 +180,69 @@ NOWPAYMENTS_SANDBOX_API_KEY = os.environ.get("NOWPAYMENTS_SANDBOX_API_KEY")
 ZARINPAL_MERCHANT_ID = os.environ.get("ZARINPAL_MERCHANT_ID")
 CALLBACK_URL = os.environ.get("CALLBACK_URL", "https://example.com/payment/verify/")
 CANCEL_URL = os.environ.get("CANCEL_URL", "https://example.com/payment/cancel/")
+
+LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} [{module}:{lineno}] {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    
+    "handlers": {
+        "info_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "info.log",
+            "maxBytes": 1024 * 1024 * 10,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+        },
+        "warning_file": {
+            "level": "WARNING",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "warning.log",
+            "maxBytes": 1024 * 1024 * 10,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+        },
+        "error_file": {
+            "level": "ERROR",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "error.log",
+            "maxBytes": 1024 * 1024 * 10,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+        },
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+    },
+    
+    "loggers": {
+        "django": {
+            "handlers": ["console", "info_file", "warning_file", "error_file"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["error_file", "console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
