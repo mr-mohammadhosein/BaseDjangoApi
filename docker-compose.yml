@@ -19,6 +19,8 @@ services:
     restart: unless-stopped
     networks:
       - base-network
+    profiles:
+      - postgres
 
   minio:
     image: minio/minio:latest
@@ -79,6 +81,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: base_project_backend
+    user: "${UID:-1000}:${GID:-1000}"
     command: sh scripts/entrypoint.sh
     volumes:
       - .:/app
@@ -88,8 +91,10 @@ services:
     depends_on:
       db_postgres:
         condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
+        required: false
     restart: unless-stopped
     networks:
       - base-network
@@ -99,6 +104,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: base_project_celery_worker
+    user: "${UID:-1000}:${GID:-1000}"
     command: celery -A config worker -l info
     volumes:
       - .:/app
@@ -114,6 +120,8 @@ services:
     restart: unless-stopped
     networks:
       - base-network
+    profiles:
+      - celery
 
 networks:
   base-network:
