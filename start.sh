@@ -71,7 +71,8 @@ DB_HOST=""
 DB_PORT="5432"
 SECRET_KEY=""
 TOTAL_STEPS=6
-
+PREVIOUS_PROJECT_SLUG=""
+PREVIOUS_PROJECT_DASH=""
 # ─────────────────────────────────────────────
 # Terminal Helpers
 # ─────────────────────────────────────────────
@@ -258,7 +259,14 @@ generate_secret_key() {
     python3 -c "import secrets; print(''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789_-') for _ in range(50)))" 2>/dev/null || \
     head -c 50 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 50
 }
+load_previous_project_name() {
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+        PREVIOUS_PROJECT_SLUG=$(grep -m1 "^# .* — Environment Configuration" "$SCRIPT_DIR/.env" | sed "s/^# //; s/ — Environment Configuration//")
+    fi
 
+    [ -z "$PREVIOUS_PROJECT_SLUG" ] && PREVIOUS_PROJECT_SLUG="base_project"
+    PREVIOUS_PROJECT_DASH="${PREVIOUS_PROJECT_SLUG//_/-}"
+}
 # ─────────────────────────────────────────────
 # Banner
 # ─────────────────────────────────────────────
@@ -307,7 +315,7 @@ step_project_name() {
     printf "\n"
 
     while true; do
-        prompt_input "Project name" "base_project" PROJECT_SLUG
+        prompt_input "Project name" "$PREVIOUS_PROJECT_SLUG" PROJECT_SLUG
 
         if [[ ! "$PROJECT_SLUG" =~ ^[a-z][a-z0-9_]*$ ]]; then
             print_error "Invalid! Use lowercase + underscores, starting with a letter."
@@ -337,7 +345,6 @@ step_project_name() {
     print_success "Project: ${PROJECT_SLUG}"
     sleep 0.3
 }
-
 # ═══════════════════════════════════════════════
 # STEP 2 — Run Mode
 # ═══════════════════════════════════════════════
@@ -522,7 +529,7 @@ apply_generate_env() {
     local dash="${PROJECT_SLUG//_/-}"
 
     local compose_profiles=""
-    [ "$DB_CHOICE" = "postgres" ] && compose_profiles="${compose_profiles}postgres,"
+    [ "$DB_CHOICE" = "postgresql" ] && compose_profiles="${compose_profiles}postgres,"
     [ "$USE_MINIO" = "true" ] && compose_profiles="${compose_profiles}minio,"
     [ "$USE_REDIS" = "true" ] && compose_profiles="${compose_profiles}redis,"
     [ "$USE_CELERY" = "true" ] && compose_profiles="${compose_profiles}celery,"
@@ -590,19 +597,81 @@ ENVEOF
     print_success ".env generated"
 }
 
-apply_rename() {
-    if [ "$PROJECT_SLUG" = "base_project" ]; then
-        print_info "Name unchanged — skipping rename."
-        return
+save_project_history() {
+    local history_key="PROJECT_HISTORY"
+    local current_name="$PROJECT_SLUG"
+    
+    if [ ! -f "$SCRIPT_DIR/.env" ]; then
+        touch "$SCRIPT_DIR/.env"
     fi
 
+    local current_history=$(grep "^${history_key}=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2-)
+    
+
+    if [ -z "$current_history" ]; then
+        current_history="base_project"
+    fi
+    
+    if ! echo "$current_history" | grep -q "\b${current_name}\b"; then
+        current_history="${current_history},${current_name}"
+    fi
+
+    if [ "$OS_TYPE" = "macos" ]; then
+        sed -i '' "s/^${history_key}=.*/${history_key}=${current_history}/" "$SCRIPT_DIR/.env" 2>/dev/null || \
+        echo "${history_key}=${current_history}" >> "$SCRIPT_DIR/.env"
+    else
+        sed -i "s/^${history_key}=.*/${history_key}=${current_history}/" "$SCRIPT_DIR/.env" 2>/dev/null || \
+        echo "${history_key}=${current_history}" >> "$SCRIPT_DIR/.env"
+    fi
+}
+
+load_project_history() {
+    local history_key="PROJECT_HISTORY"
+    local old_names=()
+    
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+        local history=$(grep "^${history_key}=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2-)
+        if [ -n "$history" ]; then
+            IFS=',' read -ra old_names <<< "$history"
+        fi
+    fi
+    
+
+    if [ ${#old_names[@]} -eq 0 ]; then
+        old_names=("${PREVIOUS_PROJECT_SLUG:-base_project}")
+    fi
+    
+    echo "${old_names[@]}"
+}
+apply_rename() {
     print_arrow "Renaming project files..."
 
-    local dash="${PROJECT_SLUG//_/-}"
-    local title
-    title=$(echo "$PROJECT_SLUG" | sed 's/_/ /g' | sed 's/\b\(.\)/\u\1/g')
-    local cap
-    cap=$(echo "$PROJECT_SLUG" | sed 's/_/ /g' | sed 's/^./\U&/')
+    local new_slug="$PROJECT_SLUG"
+    local new_dash="${PROJECT_SLUG//_/-}"
+    local new_title
+    new_title=$(echo "$PROJECT_SLUG" | sed 's/_/ /g' | sed 's/\b\(.\)/\u\1/g')
+    local new_cap
+    new_cap=$(echo "$PROJECT_SLUG" | sed 's/_/ /g' | sed 's/^./\U&/')
+
+    local old_names=($(load_project_history))
+
+
+    local all_names=("${old_names[@]}" "$new_slug")
+    
+
+    local unique_names=()
+    for name in "${all_names[@]}"; do
+        local found=false
+        for uniq in "${unique_names[@]}"; do
+            if [ "$name" = "$uniq" ]; then
+                found=true
+                break
+            fi
+        done
+        if [ "$found" = false ]; then
+            unique_names+=("$name")
+        fi
+    done
 
     local files=("docker-compose.yml" "config/settings.py" "config/urls.py" ".env" "scripts/entrypoint.sh")
     local count=0
@@ -612,38 +681,49 @@ apply_rename() {
         [ ! -f "$fp" ] && continue
 
         local changed=false
-        if grep -q "base_project" "$fp" 2>/dev/null; then
-            if [ "$OS_TYPE" = "macos" ]; then
-                sed -i '' "s/base_project/${PROJECT_SLUG}/g" "$fp"
-            else
-                sed -i "s/base_project/${PROJECT_SLUG}/g" "$fp"
+
+        for old_slug in "${unique_names[@]}"; do
+            [ "$old_slug" = "$new_slug" ] && continue
+            
+            if [ "$file" = "docker-compose.yml" ]; then
+                if grep -q "container_name: ${old_slug}" "$fp" 2>/dev/null; then
+                    if [ "$OS_TYPE" = "macos" ]; then
+                        sed -i '' "s/container_name: ${old_slug}/container_name: ${new_slug}/g" "$fp"
+                    else
+                        sed -i "s/container_name: ${old_slug}/container_name: ${new_slug}/g" "$fp"
+                    fi
+                    changed=true
+                fi
             fi
-            changed=true
-        fi
-        if grep -q "base-project" "$fp" 2>/dev/null; then
-            if [ "$OS_TYPE" = "macos" ]; then
-                sed -i '' "s/base-project/${dash}/g" "$fp"
-            else
-                sed -i "s/base-project/${dash}/g" "$fp"
-            fi
-            changed=true
-        fi
-        if grep -q "Base Project" "$fp" 2>/dev/null; then
-            if [ "$OS_TYPE" = "macos" ]; then
-                sed -i '' "s/Base Project/${title}/g" "$fp"
-            else
-                sed -i "s/Base Project/${title}/g" "$fp"
-            fi
-            changed=true
-        fi
-        if grep -q "Base project" "$fp" 2>/dev/null; then
-            if [ "$OS_TYPE" = "macos" ]; then
-                sed -i '' "s/Base project/${cap}/g" "$fp"
-            else
-                sed -i "s/Base project/${cap}/g" "$fp"
-            fi
-            changed=true
-        fi
+            
+            local old_dash="${old_slug//_/-}"
+            local old_title
+            old_title=$(echo "$old_slug" | sed 's/_/ /g' | sed 's/\b\(.\)/\u\1/g')
+            local old_cap
+            old_cap=$(echo "$old_slug" | sed 's/_/ /g' | sed 's/^./\U&/')
+
+            local replacements=(
+                "${old_slug}:${new_slug}"
+                "${old_dash}:${new_dash}"
+                "${old_title}:${new_title}"
+                "${old_cap}:${new_cap}"
+            )
+
+            for pair in "${replacements[@]}"; do
+                local from="${pair%%:*}"
+                local to="${pair#*:}"
+                [ "$from" = "$to" ] && continue
+
+                if grep -q "$from" "$fp" 2>/dev/null; then
+                    if [ "$OS_TYPE" = "macos" ]; then
+                        sed -i '' "s/${from}/${to}/g" "$fp"
+                    else
+                        sed -i "s/${from}/${to}/g" "$fp"
+                    fi
+                    changed=true
+                fi
+            done
+        done
 
         if [ "$changed" = true ]; then
             print_success "Updated: ${file}"
@@ -652,8 +732,25 @@ apply_rename() {
     done
 
     [ $count -eq 0 ] && print_info "No files needed updating."
+    
+    save_project_history
 }
+warn_existing_postgres_data() {
+    if [ "$RUN_MODE" != "docker" ] || [ "$DB_CHOICE" != "postgresql" ]; then
+        return
+    fi
 
+    if [ -d "$SCRIPT_DIR/postgres_data" ]; then
+        printf "\n"
+        print_warning "Existing postgres_data directory found."
+        print_warning "If DB_NAME, DB_USER or DB_PASSWORD changed, PostgreSQL will keep the old database roles."
+        print_info "For a clean local reset, stop Docker and remove postgres_data manually:"
+        print_info "  docker compose down"
+        print_info "  rmdir /s /q postgres_data    # Windows CMD"
+        print_info "  Remove-Item -Recurse -Force .\\postgres_data    # PowerShell"
+        printf "\n"
+    fi
+}
 apply_finish() {
     printf "\n"
     box_top
@@ -718,7 +815,7 @@ apply_finish() {
 main() {
     detect_os
     setup_colors
-
+    load_previous_project_name
     if [ ! -f "$SCRIPT_DIR/manage.py" ]; then
         print_error "manage.py not found! Run from project root."
         exit 1
@@ -742,6 +839,7 @@ main() {
 
     apply_generate_env
     apply_rename
+    warn_existing_postgres_data
     apply_finish
 }
 
