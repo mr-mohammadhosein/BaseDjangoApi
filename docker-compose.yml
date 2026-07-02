@@ -1,7 +1,8 @@
 services:
   db_postgres:
     image: postgres:16-alpine
-    env_file: .env
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: ${DB_NAME:-base_project_db}
       POSTGRES_USER: ${DB_USER:-base_project_user}
@@ -17,6 +18,7 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    init: true
     networks:
       - base-network
 
@@ -34,6 +36,7 @@ services:
       retries: 10
       start_period: 5s
     restart: unless-stopped
+    init: true
     networks:
       - base-network
     profiles:
@@ -58,6 +61,7 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    init: true
     networks:
       - base-network
     profiles:
@@ -70,7 +74,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    env_file: .env
+    env_file:
+      - .env
     command: python scripts/setup-minio.py
     networks:
       - base-network
@@ -87,11 +92,13 @@ services:
       - .:/app
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
-    env_file: .env
+    env_file:
+      - .env
     depends_on:
       db_postgres:
         condition: service_healthy
     restart: unless-stopped
+    init: true
     networks:
       - base-network
 
@@ -103,7 +110,8 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app
-    env_file: .env
+    env_file:
+      - .env
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -113,6 +121,7 @@ services:
       db_postgres:
         condition: service_healthy
     restart: unless-stopped
+    init: true
     networks:
       - base-network
     profiles:

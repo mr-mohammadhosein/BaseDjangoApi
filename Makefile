@@ -1,13 +1,21 @@
-.PHONY: help build up down logs migrate makemigrations shell test lint format setup-pre-commit redis-up celery-up minio-up all-up
+.DEFAULT_GOAL := help
+
+COMPOSE ?= docker compose
+SERVICE ?= backend
+
+.PHONY: help build up down restart ps logs migrate makemigrations superuser shell test lint format setup-pre-commit redis-up celery-up minio-up all-up clean
 
 help:
 	@echo "Available commands:"
 	@echo "  build            - Build docker images"
-	@echo "  up               - Start docker containers (without celery, minio)"
+	@echo "  up               - Start docker containers"
 	@echo "  down             - Stop docker containers"
+	@echo "  restart          - Restart docker containers"
+	@echo "  ps               - List docker containers"
 	@echo "  logs             - View docker logs"
 	@echo "  migrate          - Run django migrations"
 	@echo "  makemigrations   - Create django migrations"
+	@echo "  superuser        - Create django superuser"
 	@echo "  shell            - Open django shell"
 	@echo "  test             - Run tests"
 	@echo "  lint             - Run ruff linter"
@@ -18,45 +26,56 @@ help:
 	@echo "  minio-up         - Start containers with minio"
 	@echo "  all-up           - Start containers with all services"
 
+# Docker lifecycle
 build:
-	docker compose up --build -d
+	$(COMPOSE) build
 
 up:
-	docker compose up -d
+	$(COMPOSE) up -d
 
 redis-up:
-	docker compose --profile redis up -d
+	$(COMPOSE) --profile redis up -d
 
 celery-up:
-	docker compose --profile celery up -d
+	$(COMPOSE) --profile celery up -d
 
 minio-up:
-	docker compose --profile minio up -d
+	$(COMPOSE) --profile minio up -d
 
 all-up:
-	docker compose --profile "*" up -d
+	$(COMPOSE) --profile "*" up -d
 
 down:
-	docker compose down
+	$(COMPOSE) down
+
+restart: down up
+
+ps:
+	$(COMPOSE) ps
 
 logs:
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
+clean:
+	$(COMPOSE) down --remove-orphans
+
+# Django commands
 migrate:
-	docker compose exec backend python manage.py migrate
+	$(COMPOSE) exec $(SERVICE) python manage.py migrate
 
 makemigrations:
-	docker compose exec backend python manage.py makemigrations
+	$(COMPOSE) exec $(SERVICE) python manage.py makemigrations
 
 superuser:
-	docker compose exec backend python manage.py createsuperuser
+	$(COMPOSE) exec $(SERVICE) python manage.py createsuperuser
 
 shell:
-	docker compose exec backend python manage.py shell
+	$(COMPOSE) exec $(SERVICE) python manage.py shell
 
 test:
-	docker compose exec backend python manage.py test
+	$(COMPOSE) exec $(SERVICE) python manage.py test
 
+# Local quality tools
 lint:
 	ruff check .
 
