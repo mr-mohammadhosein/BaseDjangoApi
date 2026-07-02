@@ -54,7 +54,3 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         data["user"] = user_data
         return data
-
-
-class LogoutSerializer(serializers.Serializer):
-    refresh = serializers.CharField(required=True, write_only=True)

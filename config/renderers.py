@@ -8,9 +8,9 @@ def extract_detail_message(data, status_code):
 
     if isinstance(data, dict):
         if "detail" in data:
-            return data.get("detail")
+            return data.pop("detail")
         if "message" in data:
-            return data.get("message")
+            return data.pop("message")
 
         if not str(status_code).startswith("2"):
             try:

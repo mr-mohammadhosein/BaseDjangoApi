@@ -1,5 +1,4 @@
 from django.contrib.auth import get_user_model
-from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -7,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .serializers import LogoutSerializer, MyTokenObtainPairSerializer, UserRegisterSerializer
+from .serializers import MyTokenObtainPairSerializer, UserRegisterSerializer
 
 User = get_user_model()
 
@@ -18,23 +17,29 @@ class UserRegisterView(generics.CreateAPIView):
     serializer_class = UserRegisterSerializer
 
 
+from django.contrib.auth import login
+
+
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.user
+        login(request, user)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
 class LogoutView(APIView):
     permission_classes = (IsAuthenticated,)
 
-    @swagger_auto_schema(
-        request_body=LogoutSerializer,
-        responses={204: "Refresh token blacklisted successfully."},
-    )
     def post(self, request):
-        serializer = LogoutSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
         try:
-            refresh_token = serializer.validated_data["refresh"]
+            refresh_token = request.data["refresh"]
+            if not refresh_token:
+                raise ValueError("Refresh token is required.")
+
             token = RefreshToken(refresh_token)
             token.blacklist()
 
