@@ -5,7 +5,8 @@
 #  Works on: Linux, macOS, Windows (Git Bash / WSL / MSYS2)
 # ==============================================================================
 
-set -e
+set -Eeuo pipefail
+IFS=$'\n\t'
 
 # ─────────────────────────────────────────────
 # OS Detection
@@ -61,6 +62,7 @@ RUN_MODE=""
 DB_CHOICE=""
 USE_MINIO="false"
 USE_REDIS="false"
+USE_CELERY="false"
 ADMIN_USERNAME="admin"
 ADMIN_EMAIL="admin@example.com"
 ADMIN_PASSWORD="adminpass123"
@@ -261,7 +263,7 @@ generate_secret_key() {
 }
 load_previous_project_name() {
     if [ -f "$SCRIPT_DIR/.env" ]; then
-        PREVIOUS_PROJECT_SLUG=$(grep -m1 "^# .* — Environment Configuration" "$SCRIPT_DIR/.env" | sed "s/^# //; s/ — Environment Configuration//")
+        PREVIOUS_PROJECT_SLUG=$(grep -m1 "^# .* — Environment Configuration" "$SCRIPT_DIR/.env" 2>/dev/null | sed "s/^# //; s/ — Environment Configuration//" || true)
     fi
 
     [ -z "$PREVIOUS_PROJECT_SLUG" ] && PREVIOUS_PROJECT_SLUG="base_project"
@@ -438,7 +440,7 @@ step_services() {
         USE_REDIS="true"
         print_success "Redis: ON"
         printf "\n"
-        
+
         if prompt_yes_no "Enable Celery (background tasks)? Requires Redis." "n"; then
             USE_CELERY="true"
             print_success "Celery: ON"
@@ -571,7 +573,7 @@ AWS_ACCESS_KEY_ID=minio_admin
 AWS_SECRET_ACCESS_KEY='minio_password'
 AWS_STORAGE_BUCKET_NAME=${dash}-media
 AWS_S3_ENDPOINT_URL=http://minio:9000
-AWS_S3_MINAIO_ENDPOINT_URL=http://localhost:9000
+AWS_S3_MINIO_ENDPOINT_URL=http://localhost:9000
 AWS_S3_USE_SSL=False
 AWS_QUERYSTRING_AUTH=True
 AWS_S3_CUSTOM_DOMAIN=localhost:9000/${dash}-media
@@ -600,18 +602,18 @@ ENVEOF
 save_project_history() {
     local history_key="PROJECT_HISTORY"
     local current_name="$PROJECT_SLUG"
-    
+
     if [ ! -f "$SCRIPT_DIR/.env" ]; then
         touch "$SCRIPT_DIR/.env"
     fi
 
-    local current_history=$(grep "^${history_key}=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2-)
-    
+    local current_history
+    current_history=$(grep "^${history_key}=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2- || true)
 
     if [ -z "$current_history" ]; then
         current_history="base_project"
     fi
-    
+
     if ! echo "$current_history" | grep -q "\b${current_name}\b"; then
         current_history="${current_history},${current_name}"
     fi
@@ -628,19 +630,20 @@ save_project_history() {
 load_project_history() {
     local history_key="PROJECT_HISTORY"
     local old_names=()
-    
+
     if [ -f "$SCRIPT_DIR/.env" ]; then
-        local history=$(grep "^${history_key}=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2-)
+        local history
+        history=$(grep "^${history_key}=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2- || true)
         if [ -n "$history" ]; then
             IFS=',' read -ra old_names <<< "$history"
         fi
     fi
-    
+
 
     if [ ${#old_names[@]} -eq 0 ]; then
         old_names=("${PREVIOUS_PROJECT_SLUG:-base_project}")
     fi
-    
+
     echo "${old_names[@]}"
 }
 apply_rename() {
@@ -657,7 +660,7 @@ apply_rename() {
 
 
     local all_names=("${old_names[@]}" "$new_slug")
-    
+
 
     local unique_names=()
     for name in "${all_names[@]}"; do
@@ -673,7 +676,7 @@ apply_rename() {
         fi
     done
 
-    local files=("docker-compose.yml" "config/settings.py" "config/urls.py" ".env" "scripts/entrypoint.sh")
+    local files=("docker-compose.yml" "config/settings.py" "config/urls.py" ".env" "scripts/entrypoint.sh" "config/celery.py")
     local count=0
 
     for file in "${files[@]}"; do
@@ -684,18 +687,7 @@ apply_rename() {
 
         for old_slug in "${unique_names[@]}"; do
             [ "$old_slug" = "$new_slug" ] && continue
-            
-            if [ "$file" = "docker-compose.yml" ]; then
-                if grep -q "container_name: ${old_slug}" "$fp" 2>/dev/null; then
-                    if [ "$OS_TYPE" = "macos" ]; then
-                        sed -i '' "s/container_name: ${old_slug}/container_name: ${new_slug}/g" "$fp"
-                    else
-                        sed -i "s/container_name: ${old_slug}/container_name: ${new_slug}/g" "$fp"
-                    fi
-                    changed=true
-                fi
-            fi
-            
+
             local old_dash="${old_slug//_/-}"
             local old_title
             old_title=$(echo "$old_slug" | sed 's/_/ /g' | sed 's/\b\(.\)/\u\1/g')
@@ -732,7 +724,7 @@ apply_rename() {
     done
 
     [ $count -eq 0 ] && print_info "No files needed updating."
-    
+
     save_project_history
 }
 warn_existing_postgres_data() {
