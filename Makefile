@@ -1,4 +1,4 @@
-.PHONY: help build up down logs migrate makemigrations shell test lint format celery-up minio-up all-up
+.PHONY: help build up down logs migrate makemigrations shell test lint format setup-pre-commit redis-up celery-up minio-up all-up
 
 help:
 	@echo "Available commands:"
@@ -13,6 +13,7 @@ help:
 	@echo "  lint             - Run ruff linter"
 	@echo "  format           - Run ruff formatter"
 	@echo "  setup-pre-commit - Install pre-commit hooks"
+	@echo "  redis-up         - Start containers with redis"
 	@echo "  celery-up        - Start containers with celery"
 	@echo "  minio-up         - Start containers with minio"
 	@echo "  all-up           - Start containers with all services"
@@ -22,6 +23,9 @@ build:
 
 up:
 	docker compose up -d
+
+redis-up:
+	docker compose --profile redis up -d
 
 celery-up:
 	docker compose --profile celery up -d
