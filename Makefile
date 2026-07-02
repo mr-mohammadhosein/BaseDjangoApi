@@ -1,57 +1,86 @@
-.PHONY: help build up down logs migrate makemigrations shell test lint format celery-up minio-up all-up
+.DEFAULT_GOAL := help
+
+COMPOSE ?= docker compose
+SERVICE ?= backend
+MANAGE ?= python manage.py
+
+.PHONY: help build up down restart ps logs clean migrate makemigrations superuser shell test manage lint format setup-pre-commit redis-up celery-up minio-up all-up rebuild
 
 help:
 	@echo "Available commands:"
-	@echo "  build            - Build docker images"
-	@echo "  up               - Start docker containers (without celery, minio)"
-	@echo "  down             - Stop docker containers"
-	@echo "  logs             - View docker logs"
-	@echo "  migrate          - Run django migrations"
-	@echo "  makemigrations   - Create django migrations"
-	@echo "  shell            - Open django shell"
-	@echo "  test             - Run tests"
-	@echo "  lint             - Run ruff linter"
-	@echo "  format           - Run ruff formatter"
+	@echo "  build            - Build Docker images"
+	@echo "  up               - Start default containers"
+	@echo "  redis-up         - Start containers with Redis profile"
+	@echo "  celery-up        - Start containers with Celery profile"
+	@echo "  minio-up         - Start containers with MinIO profile"
+	@echo "  all-up           - Start containers with all profiles"
+	@echo "  down             - Stop and remove containers"
+	@echo "  restart          - Restart default containers"
+	@echo "  ps               - List containers"
+	@echo "  logs             - Follow container logs"
+	@echo "  clean            - Stop containers and remove orphans"
+	@echo "  rebuild          - Rebuild images and restart containers (down + build + up)"
+	@echo "  migrate          - Run Django migrations"
+	@echo "  makemigrations   - Create Django migrations"
+	@echo "  superuser        - Create a Django superuser"
+	@echo "  shell            - Open Django shell"
+	@echo "  test             - Run Django tests"
+	@echo "  manage           - Run custom command: make manage ARGS='...'"
+	@echo "  lint             - Run Ruff linter locally"
+	@echo "  format           - Run Ruff formatter locally"
 	@echo "  setup-pre-commit - Install pre-commit hooks"
-	@echo "  celery-up        - Start containers with celery"
-	@echo "  minio-up         - Start containers with minio"
-	@echo "  all-up           - Start containers with all services"
 
 build:
-	docker compose up --build -d
+	$(COMPOSE) build
 
 up:
-	docker compose up -d
+	$(COMPOSE) up -d
+
+redis-up:
+	$(COMPOSE) --profile redis up -d
 
 celery-up:
-	docker compose --profile celery up -d
+	$(COMPOSE) --profile celery up -d
 
 minio-up:
-	docker compose --profile minio up -d
+	$(COMPOSE) --profile minio up -d
 
 all-up:
-	docker compose --profile "*" up -d
+	$(COMPOSE) --profile "*" up -d
 
 down:
-	docker compose down
+	$(COMPOSE) down
+
+restart: down up
+
+rebuild: down build up
+
+ps:
+	$(COMPOSE) ps
 
 logs:
-	docker compose logs -f
+	$(COMPOSE) logs -f
+
+clean:
+	$(COMPOSE) down --remove-orphans
 
 migrate:
-	docker compose exec backend python manage.py migrate
+	$(COMPOSE) exec $(SERVICE) $(MANAGE) migrate
 
 makemigrations:
-	docker compose exec backend python manage.py makemigrations
+	$(COMPOSE) exec $(SERVICE) $(MANAGE) makemigrations
 
 superuser:
-	docker compose exec backend python manage.py createsuperuser
+	$(COMPOSE) exec $(SERVICE) $(MANAGE) createsuperuser
 
 shell:
-	docker compose exec backend python manage.py shell
+	$(COMPOSE) exec $(SERVICE) $(MANAGE) shell
 
 test:
-	docker compose exec backend python manage.py test
+	$(COMPOSE) exec $(SERVICE) $(MANAGE) test
+
+manage:
+	$(COMPOSE) exec $(SERVICE) $(MANAGE) $(ARGS)
 
 lint:
 	ruff check .
