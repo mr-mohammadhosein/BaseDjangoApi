@@ -175,8 +175,13 @@ print_error()   { printf "  ${BR_RED}✗${RESET} ${RED}%s${RESET}\n" "$1"; }
 print_info()    { printf "  ${BR_BLUE}ℹ${RESET} ${DIM}%s${RESET}\n" "$1"; }
 print_arrow()   { printf "  ${BR_MAGENTA}›${RESET} ${WHITE}%s${RESET}\n" "$1"; }
 
+assign_var() {
+    local var_name="$1" value="$2"
+    printf -v "$var_name" '%s' "$value"
+}
+
 prompt_input() {
-    local prompt="$1" default="$2" var_name="$3"
+    local prompt="$1" default="$2" var_name="$3" input
     if [ -n "$default" ]; then
         printf "  ${BR_CYAN}?${RESET} ${BOLD}%s${RESET} ${DIM}(%s)${RESET}: " "$prompt" "$default"
     else
@@ -184,11 +189,11 @@ prompt_input() {
     fi
     read -r input
     [ -z "$input" ] && [ -n "$default" ] && input="$default"
-    eval "$var_name='$input'"
+    assign_var "$var_name" "$input"
 }
 
 prompt_password() {
-    local prompt="$1" default="$2" var_name="$3"
+    local prompt="$1" default="$2" var_name="$3" input
     if [ -n "$default" ]; then
         printf "  ${BR_CYAN}?${RESET} ${BOLD}%s${RESET} ${DIM}(hidden, default set)${RESET}: " "$prompt"
     else
@@ -197,7 +202,7 @@ prompt_password() {
     read -rs input
     printf "\n"
     [ -z "$input" ] && [ -n "$default" ] && input="$default"
-    eval "$var_name='$input'"
+    assign_var "$var_name" "$input"
 }
 
 # FIXED: All display output goes to stderr so subshell capture works
@@ -260,6 +265,10 @@ spinner() {
 generate_secret_key() {
     python3 -c "import secrets; print(''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789_-') for _ in range(50)))" 2>/dev/null || \
     head -c 50 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 50
+}
+
+env_quote() {
+    python3 -c 'import shlex, sys; print(shlex.quote(sys.argv[1]))' "$1"
 }
 load_previous_project_name() {
     if [ -f "$SCRIPT_DIR/.env" ]; then
@@ -529,6 +538,10 @@ apply_generate_env() {
     [ "$USE_MINIO" = "true" ] && use_minio_val="True"
 
     local dash="${PROJECT_SLUG//_/-}"
+    local quoted_secret_key quoted_db_password quoted_admin_password
+    quoted_secret_key=$(env_quote "$SECRET_KEY")
+    quoted_db_password=$(env_quote "${DB_PASSWORD:-strong_password_123}")
+    quoted_admin_password=$(env_quote "$ADMIN_PASSWORD")
 
     local compose_profiles=""
     [ "$DB_CHOICE" = "postgresql" ] && compose_profiles="${compose_profiles}postgres,"
@@ -548,7 +561,7 @@ apply_generate_env() {
 COMPOSE_PROFILES=${compose_profiles}
 
 # --- Django ---
-SECRET_KEY='${SECRET_KEY}'
+SECRET_KEY=${quoted_secret_key}
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
 CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1
@@ -558,14 +571,14 @@ ALLOWED_CORS=http://localhost:3000,http://127.0.0.1:3000
 USE_SQLITE=${use_sqlite}
 DB_NAME=${DB_NAME:-${PROJECT_SLUG}_db}
 DB_USER=${DB_USER:-${PROJECT_SLUG}_user}
-DB_PASSWORD='${DB_PASSWORD:-strong_password_123}'
+DB_PASSWORD=${quoted_db_password}
 DB_HOST=${db_host_val}
 DB_PORT=${DB_PORT:-5432}
 
 # --- Superuser ---
 SUPERUSER_USERNAME=${ADMIN_USERNAME}
 SUPERUSER_EMAIL=${ADMIN_EMAIL}
-SUPERUSER_PASSWORD='${ADMIN_PASSWORD}'
+SUPERUSER_PASSWORD=${quoted_admin_password}
 
 # --- MinIO / S3 ---
 USE_MINIO=${use_minio_val}
@@ -786,11 +799,9 @@ apply_finish() {
             print_arrow "Starting containers..."
             printf "\n"
 
-            local cmd="docker compose up --build -d"
-
-            printf "  ${DIM}$ %s${RESET}\n\n" "$cmd"
+            printf "  ${DIM}$ docker compose up --build -d${RESET}\n\n"
             cd "$SCRIPT_DIR"
-            eval "$cmd"
+            docker compose up --build -d
         else
             printf "\n"
             print_info "Run the command above when you're ready."
