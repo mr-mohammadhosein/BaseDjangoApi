@@ -1,9 +1,11 @@
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import generics, viewsets
+from drf_yasg import openapi
+from drf_yasg.utils import no_body, swagger_auto_schema
+from rest_framework import generics, mixins, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import SearchFilter
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -20,13 +22,50 @@ from .serializers import (
     TicketStatusUpdateSerializer,
 )
 
+ATTACHMENTS_PARAMETER = openapi.Parameter(
+    "attachments",
+    openapi.IN_FORM,
+    description=(
+        "Optional ticket attachment. To upload multiple files, send this form field more than once."
+    ),
+    type=openapi.TYPE_FILE,
+    required=False,
+)
 
-class TicketViewSet(FieldFilterOverviewMixin, viewsets.ModelViewSet):
+MESSAGE_CREATE_FORM_PARAMETERS = [
+    openapi.Parameter("text", openapi.IN_FORM, type=openapi.TYPE_STRING, required=True),
+    ATTACHMENTS_PARAMETER,
+]
+
+TICKET_CREATE_FORM_PARAMETERS = [
+    openapi.Parameter("title", openapi.IN_FORM, type=openapi.TYPE_STRING, required=True),
+    openapi.Parameter("ticket_type", openapi.IN_FORM, type=openapi.TYPE_STRING, required=True),
+    openapi.Parameter(
+        "priority",
+        openapi.IN_FORM,
+        type=openapi.TYPE_STRING,
+        enum=[choice[0] for choice in Ticket.Priority.choices],
+        required=False,
+    ),
+    openapi.Parameter("text", openapi.IN_FORM, type=openapi.TYPE_STRING, required=True),
+    ATTACHMENTS_PARAMETER,
+]
+
+
+class TicketViewSet(
+    FieldFilterOverviewMixin,
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_class = TicketFilter
     search_fields = ["title", "messages__text"]
     lookup_field = "id"
+    http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_queryset(self):
         return Ticket.objects.filter(user=self.request.user).select_related("ticket_type", "user")
@@ -39,6 +78,14 @@ class TicketViewSet(FieldFilterOverviewMixin, viewsets.ModelViewSet):
         if self.action == "set_status":
             return TicketStatusUpdateSerializer
         return TicketDetailSerializer
+
+    @swagger_auto_schema(
+        request_body=no_body,
+        manual_parameters=TICKET_CREATE_FORM_PARAMETERS,
+        consumes=["multipart/form-data"],
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=["patch"], url_path="set-status")
     def set_status(self, request, id=None):
@@ -54,6 +101,7 @@ class TicketViewSet(FieldFilterOverviewMixin, viewsets.ModelViewSet):
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_class = MessageFilter
     search_fields = ["text"]
@@ -78,9 +126,20 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
+        if getattr(self, "swagger_fake_view", False):
+            return context
+
         context["ticket"] = self.get_ticket()
         context["request"] = self.request
         return context
+
+    @swagger_auto_schema(
+        request_body=no_body,
+        manual_parameters=MESSAGE_CREATE_FORM_PARAMETERS,
+        consumes=["multipart/form-data"],
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -94,21 +153,10 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
         return Response(serializer.data)
 
 
-class MessageRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+class MessageRetrieveUpdateDestroyAPIView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = MessageSerializer
     lookup_field = "id"
 
     def get_queryset(self):
         return Message.objects.filter(sender=self.request.user)
-
-    def perform_update(self, serializer):
-        message = serializer.instance
-        if message.ticket.status == Ticket.Status.CLOSED:
-            raise PermissionDenied("You cannot edit messages in a closed ticket.")
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        if instance.ticket.status == Ticket.Status.CLOSED:
-            raise PermissionDenied("You cannot delete messages in a closed ticket.")
-        instance.delete()
