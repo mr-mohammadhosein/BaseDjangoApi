@@ -15,9 +15,10 @@ def username_validator(value):
 
 
 def profile_picture_validator(value):
-    if (
-        not value.name.endswith(".png")
-        and not value.name.endswith(".jpg")
-        and not value.name.endswith(".jpeg")
-    ):
+    allowed_extensions = (".png", ".jpg", ".jpeg")
+    if not value.name.lower().endswith(allowed_extensions):
         raise ValidationError(_("The type of entered file must be png, jpg or jpeg."))
+
+    max_size = 5 * 1024 * 1024
+    if value.size > max_size:
+        raise ValidationError(_("Profile picture size must not exceed 5MB."))

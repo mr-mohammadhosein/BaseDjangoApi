@@ -22,6 +22,12 @@ class UserProfileUpdateViewTestCase(APITestCase):
         response = self.client.patch(self.url, {"first_name": "NewName"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_authenticated_user_can_view_profile(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(reverse("profile"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["data"]["first_name"], self.user.first_name)
+
     def test_authenticated_user_can_update_profile_fields(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.patch(
