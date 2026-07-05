@@ -7,15 +7,7 @@ from .serializers import UserUpdateSerializer
 User = get_user_model()
 
 
-class UserProfileView(generics.RetrieveAPIView):
-    serializer_class = UserUpdateSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        return self.request.user
-
-
-class UserProfileUpdateView(generics.UpdateAPIView):
+class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserUpdateSerializer
     permission_classes = [IsAuthenticated]
 

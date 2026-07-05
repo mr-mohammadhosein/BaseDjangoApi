@@ -1,14 +1,20 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.exceptions import ValidationError
+from rest_framework.test import APIClient
+from .validators import profile_picture_validator
+from config.exception_handler import custom_exception_handler
 
 User = get_user_model()
 
-
-class UserProfileUpdateViewTestCase(APITestCase):
+class UserProfileUpdateViewTestCase(TestCase):
     def setUp(self):
-        self.url = reverse("profile-update")
+        self.url = reverse("profile")
         self.user_password = "strongpassword123"
         self.user = User.objects.create_user(
             username="testuser",
@@ -17,6 +23,7 @@ class UserProfileUpdateViewTestCase(APITestCase):
             first_name="Test",
             last_name="User",
         )
+        self.client = APIClient()
 
     def test_unauthenticated_user_cannot_update_profile(self):
         response = self.client.patch(self.url, {"first_name": "NewName"})
@@ -48,11 +55,9 @@ class UserProfileUpdateViewTestCase(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # Verify old password no longer works
-        self.assertFalse(self.user.check_password(self.user_password))
-
-        # Reload user from DB and verify new password works
+        # Reload user from DB and verify password change
         self.user.refresh_from_db()
+        self.assertFalse(self.user.check_password(self.user_password))
         self.assertTrue(self.user.check_password(new_password))
 
     def test_password_change_validation_fails_on_mismatch(self):
@@ -68,13 +73,53 @@ class UserProfileUpdateViewTestCase(APITestCase):
         self.assertIn("password", json_data["errors"])
 
 
-from django.db import IntegrityError
-from rest_framework.exceptions import ValidationError
+class ProfilePictureValidatorTestCase(SimpleTestCase):
+    def test_profile_picture_validator_accepts_valid_extension(self):
+        uploaded_file = SimpleUploadedFile(
+            "avatar.jpg",
+            b"dummycontent",
+            content_type="image/jpeg",
+        )
 
-from config.exception_handler import custom_exception_handler
+        profile_picture_validator(uploaded_file)
+
+    def test_profile_picture_validator_accepts_uppercase_extension(self):
+        uploaded_file = SimpleUploadedFile(
+            "avatar.JPG",
+            b"dummycontent",
+            content_type="image/jpeg",
+        )
+
+        profile_picture_validator(uploaded_file)
+
+    def test_profile_picture_validator_rejects_invalid_extension(self):
+        uploaded_file = SimpleUploadedFile(
+            "avatar.gif",
+            b"dummycontent",
+            content_type="image/gif",
+        )
+
+        with self.assertRaises(DjangoValidationError) as ctx:
+            profile_picture_validator(uploaded_file)
+
+        self.assertEqual(ctx.exception.code, "invalid_extension")
+        self.assertIn("png, jpg or jpeg", str(ctx.exception))
+
+    def test_profile_picture_validator_rejects_files_exceeding_size_limit(self):
+        uploaded_file = SimpleUploadedFile(
+            "avatar.jpg",
+            b"a" * (5 * 1024 * 1024 + 1),
+            content_type="image/jpeg",
+        )
+
+        with self.assertRaises(DjangoValidationError) as ctx:
+            profile_picture_validator(uploaded_file)
+
+        self.assertEqual(ctx.exception.code, "file_too_large")
+        self.assertIn("must not exceed 5MB", str(ctx.exception))
 
 
-class CustomExceptionHandlerTestCase(APITestCase):
+class CustomExceptionHandlerTestCase(SimpleTestCase):
     def test_drf_standard_exception_is_handled(self):
         # We raise a DRF ValidationError and verify the central handler captures it
         exc = ValidationError({"field": ["Some field error"]})
