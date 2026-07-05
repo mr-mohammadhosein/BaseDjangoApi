@@ -1,9 +1,13 @@
 import os
 
+from django.conf import settings
 from rest_framework import serializers
 
 from panel.Ticketing.models import Attachment, Message, Ticket, TicketType
 from panel.Ticketing.validators import validate_attachment_extension
+
+MAX_FILE_SIZE = settings.TICKET_ATTACHMENT_MAX_FILE_SIZE
+MAX_ATTACHMENTS_PER_MESSAGE = settings.TICKET_ATTACHMENT_MAX_FILES
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
@@ -59,11 +63,15 @@ class MessageCreateSerializer(serializers.ModelSerializer):
         ref_name = "message_panel"
 
     def validate_attachments(self, files):
-        if len(files) > 5:
-            raise serializers.ValidationError("You can upload a maximum of 5 files.")
+        if len(files) > MAX_ATTACHMENTS_PER_MESSAGE:
+            raise serializers.ValidationError(
+                f"You can upload a maximum of {MAX_ATTACHMENTS_PER_MESSAGE} files."
+            )
         for file in files:
-            if file.size > 5 * 1024 * 1024:
-                raise serializers.ValidationError("File size exceeds the limit of 5MB.")
+            if file.size > MAX_FILE_SIZE:
+                raise serializers.ValidationError(
+                    f"File size exceeds the limit of {MAX_FILE_SIZE // 1024 // 1024}MB."
+                )
             validate_attachment_extension(file)
         return files
 

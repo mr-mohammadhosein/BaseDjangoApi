@@ -1,13 +1,14 @@
 import os
 
+from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from panel.Ticketing.models import Attachment, Message, Ticket, TicketType
 from panel.Ticketing.validators import validate_attachment_extension
 
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
-MAX_ATTACHMENTS_PER_MESSAGE = 5
+MAX_FILE_SIZE = settings.TICKET_ATTACHMENT_MAX_FILE_SIZE
+MAX_ATTACHMENTS_PER_MESSAGE = settings.TICKET_ATTACHMENT_MAX_FILES
 
 
 class TicketTypeSerializer(serializers.ModelSerializer):

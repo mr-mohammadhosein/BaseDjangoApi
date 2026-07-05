@@ -136,6 +136,17 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
+# --- Ticket Attachments ---
+TICKET_ATTACHMENT_MAX_FILE_SIZE = env.int(
+    "TICKET_ATTACHMENT_MAX_FILE_SIZE",
+    default=100 * 1024 * 1024,
+)
+TICKET_ATTACHMENT_MAX_FILES = env.int("TICKET_ATTACHMENT_MAX_FILES", default=5)
+TICKET_ATTACHMENT_BLOCKED_EXTENSIONS = env.list(
+    "TICKET_ATTACHMENT_BLOCKED_EXTENSIONS",
+    default=[".exe", ".bat", ".cmd", ".sh"],
+)
+
 # MinIO (S3) Storage Settings
 USE_MINIO = env("USE_MINIO")
 

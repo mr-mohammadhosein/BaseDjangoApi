@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from billing.models import DiscountCode
 from panel.Ticketing.models import Attachment, Message, Ticket, TicketType
+from panel.Ticketing.validators import validate_attachment_extension
 
 User = get_user_model()
 
@@ -87,6 +88,19 @@ class PanelBillingAndTicketingTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Attachment.objects.count(), 0)
+
+    def test_ticket_attachment_validator_blocks_executable_extensions_with_code(self):
+        upload = SimpleUploadedFile(
+            "deploy.cmd", b"not really a command", content_type="application/octet-stream"
+        )
+
+        with self.assertRaisesMessage(
+            Exception,
+            "Files with the .cmd extension are not allowed.",
+        ) as exc:
+            validate_attachment_extension(upload)
+
+        self.assertEqual(exc.exception.get_codes(), ["blocked_attachment_extension"])
 
     def test_staff_can_view_all_tickets_and_update(self):
         self.client.force_authenticate(user=self.admin_user)
