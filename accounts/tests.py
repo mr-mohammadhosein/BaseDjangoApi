@@ -7,8 +7,10 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
-from .validators import profile_picture_validator
+
 from config.exception_handler import custom_exception_handler
+
+from .validators import profile_picture_validator
 
 User = get_user_model()
 

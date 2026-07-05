@@ -1,7 +1,8 @@
+from pathlib import Path
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from pathlib import Path
+
 
 def username_validator(value):
     allowed_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
