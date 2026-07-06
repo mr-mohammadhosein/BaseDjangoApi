@@ -235,10 +235,9 @@ SWAGGER_SETTINGS = {
     },
     "PERSIST_AUTH": True,
     "USE_SESSION_AUTH": DEBUG,
+    "LOGIN_URL": "/admin/login/",
+    "LOGOUT_URL": "/swagger/logout/",
 }
-
-LOGIN_URL = "/admin/login/"
-LOGOUT_URL = "/swagger/logout/"
 
 # --- Payment Settings ---
 SANDBOX = env("SANDBOX")
