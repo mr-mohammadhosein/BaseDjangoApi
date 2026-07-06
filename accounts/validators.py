@@ -1,3 +1,4 @@
+from pathlib import Path
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -10,14 +11,24 @@ def username_validator(value):
             raise ValidationError(
                 _(
                     "Invalid character in the username. Only English letters, numbers, hyphens, and underscores are allowed."
-                )
+                ),
+                code="invalid_username",
             )
 
 
 def profile_picture_validator(value):
-    if (
-        not value.name.endswith(".png")
-        and not value.name.endswith(".jpg")
-        and not value.name.endswith(".jpeg")
-    ):
-        raise ValidationError(_("The type of entered file must be png, jpg or jpeg."))
+    extension = Path(value.name).suffix.lower()
+    allowed_extensions = {".png", ".jpg", ".jpeg"}
+
+    if extension not in allowed_extensions:
+        raise ValidationError(
+    _("The type of entered file must be png, jpg or jpeg."),
+    code="invalid_extension",
+)
+
+    max_size = 5 * 1024 * 1024
+    if value.size > max_size:
+        raise ValidationError(
+    _("Profile picture size must not exceed 5MB."),
+    code="file_too_large",
+)
