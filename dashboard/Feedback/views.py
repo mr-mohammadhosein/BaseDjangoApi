@@ -16,6 +16,7 @@ class FeedbackViewSet(FieldFilterOverviewMixin, viewsets.ModelViewSet):
     search_fields = ["subject", "text"]
     ordering_fields = ["created_at"]
     lookup_field = "id"
+    http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
         return Feedback.objects.filter(user=self.request.user)
