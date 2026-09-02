@@ -6,8 +6,8 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_DB: ${DB_NAME:-base_project_db}
-      POSTGRES_USER: ${DB_USER:-base_project_user}
+      POSTGRES_DB: ${DB_NAME:-apex_db}
+      POSTGRES_USER: ${DB_USER:-apex_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-strong_password_123}
     volumes:
       - postgres_data:/var/lib/postgresql/data

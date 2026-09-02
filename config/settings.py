@@ -47,7 +47,7 @@ THIRD_PARTY_APPS = [
     "corsheaders",
     "storages",
     "django_filters",
-    "drf_yasg",
+    "drf_spectacular",
 ]
 
 LOCAL_APPS = [
@@ -111,8 +111,8 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": env("DB_NAME", default="base_project_db"),
-            "USER": env("DB_USER", default="base_project_user"),
+            "NAME": env("DB_NAME", default="apex_db"),
+            "USER": env("DB_USER", default="apex_user"),
             "PASSWORD": env("DB_PASSWORD", default="strong_password_123"),
             "HOST": env("DB_HOST", default="localhost"),
             "PORT": env("DB_PORT", default="5432"),
@@ -213,6 +213,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "config.pagination.DefaultPagination",
     "PAGE_SIZE": 10,
     "EXCEPTION_HANDLER": "config.exception_handler.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # --- SimpleJWT Settings ---
@@ -224,19 +225,42 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-SWAGGER_SETTINGS = {
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Apex API",
+    "DESCRIPTION": "Apex backend API documentation",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SWAGGER_UI_SETTINGS": {
+        "persistAuthorization": True,
+        "deepLinking": True,
+        "displayOperationId": True,
+        "filter": True,
+        "tryItOutEnabled": True,
+    },
+    "COMPONENT_SPLIT_REQUEST": True,
+    "TAGS": [
+        {"name": "auth", "description": "Authentication endpoints"},
+        {"name": "accounts", "description": "User account management"},
+        {"name": "panel", "description": "Panel management"},
+        {"name": "dashboard", "description": "Dashboard endpoints"},
+        {"name": "billing", "description": "Billing and payments"},
+    ],
+    "SCHEMA_PATH_PREFIX": "/api/v1/",
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    "SERVERS": [
+        {
+            "url": "http://localhost:8000",
+            "description": "Development",
+        },
+    ],
+    "SECURITY": [{"Bearer": []}],
     "SECURITY_DEFINITIONS": {
         "Bearer": {
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header",
-            "description": "Use: Bearer <access_token>",
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
         }
     },
-    "PERSIST_AUTH": True,
-    "USE_SESSION_AUTH": DEBUG,
-    "LOGIN_URL": "/admin/login/",
-    "LOGOUT_URL": "/swagger/logout/",
 }
 
 # --- Payment Settings ---
