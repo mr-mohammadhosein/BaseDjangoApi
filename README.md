@@ -75,6 +75,29 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+### Makefile commands
+
+By default, Django management commands run in the local Python environment:
+
+```bash
+make migrate
+make makemigrations
+make manage ARGS="check"
+```
+
+To run the same commands inside the Docker `backend` service, use the explicit
+`-docker` targets. The relevant containers must already be running:
+
+```bash
+make up
+make migrate-docker
+make makemigrations-docker
+make manage-docker ARGS="check"
+```
+
+The same naming convention applies to `shell`, `test`, and `superuser`
+(for example, `make shell-docker`).
+
 ## 📚 API Endpoints
 
 | Endpoint | Description |
