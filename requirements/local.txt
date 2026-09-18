@@ -1,3 +1,10 @@
--r prod.txt
-ruff==0.4.5
-pre-commit==3.7.1
+-r base.txt
+cfgv==3.5.0
+identify==2.6.19
+nodeenv==1.10.0
+pre-commit==4.6.2
+pre-commit-hooks==6.0.0
+python-discovery==1.6.1
+ruamel.yaml==0.19.1
+ruff==0.16.8
+virtualenv==21.7.14
